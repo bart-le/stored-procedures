@@ -18,7 +18,18 @@ namespace warehouses.Services
 
 		public async Task<bool> ProductExistsAsync(int idProduct)
 		{
-			throw new NotImplementedException();
+			using SqlConnection connection = GetSqlConnection();
+			var command = new SqlCommand(
+				"SELECT 1 FROM Product WHERE IdProduct = @idProduct",
+				connection
+			);
+
+			command.Parameters.AddWithValue("@idProduct", idProduct);
+			await connection.OpenAsync();
+
+			var result = await command.ExecuteReaderAsync();
+
+			return result.HasRows;
 		}
 
 		public async Task<Order> GetOrderAsync(int idProduct, int amount, DateTime createdAt)
