@@ -76,9 +76,30 @@ namespace warehouses.Services
 			}
 		}
 
-		public async Task<bool> OrderCompletedAsync(int idOrder)
+		public async Task<bool> IsOrderCompletedAsync(Order order)
 		{
-			throw new NotImplementedException();
+			try
+			{
+				if (order.FulfilledAt != null)
+					return true;
+
+				using SqlConnection connection = GetSqlConnection();
+				var command = new SqlCommand(
+					"SELECT 1 FROM Product_Warehouse WHERE IdOrder = @idOrder",
+					connection
+				);
+
+				command.Parameters.AddWithValue("@idOrder", order.IdOrder);
+				await connection.OpenAsync();
+
+				var result = await command.ExecuteReaderAsync();
+
+				return result.HasRows;
+			}
+			catch (Exception)
+			{
+				return false;
+			}
 		}
 
 		public async Task CompleteOrderAsync(int idOrder)
