@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using System;
+using System.Data;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
 using warehouses.Models;
@@ -157,6 +158,31 @@ namespace warehouses.Services
 			{
 				await transaction.RollbackAsync();
 
+				return -1;
+			}
+		}
+
+		public async Task<int> RegisterWarehouseProductAsync(ProductDto productDto)
+		{
+			using SqlConnection connection = GetSqlConnection();
+			using SqlCommand command = connection.CreateCommand();
+
+			await connection.OpenAsync();
+
+			command.CommandText = "AddProductToWarehouse";
+			command.CommandType = CommandType.StoredProcedure;
+
+			command.Parameters.AddWithValue("@IdProduct", productDto.IdProduct);
+			command.Parameters.AddWithValue("@IdWarehouse", productDto.IdWarehouse);
+			command.Parameters.AddWithValue("@Amount", productDto.Amount);
+			command.Parameters.AddWithValue("@CreatedAt", productDto.CreatedAt);
+
+			try
+			{
+				return Convert.ToInt32(await command.ExecuteScalarAsync());
+			}
+			catch (Exception)
+			{
 				return -1;
 			}
 		}

@@ -11,5 +11,6 @@ namespace warehouses.Services
 		Task<Order> GetOrderAsync(int idProduct, int amount, DateTime createdAt);
 		Task<bool> IsOrderCompletedAsync(Order order);
 		Task<int> RegisterWarehouseProductAsync(int idOrder, ProductDto productDto);
+		Task<int> RegisterWarehouseProductAsync(ProductDto productDto);
 	}
 }
