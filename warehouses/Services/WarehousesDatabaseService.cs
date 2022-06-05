@@ -18,17 +18,18 @@ namespace warehouses.Services
 
 		public async Task<bool> ProductExistsAsync(int idProduct)
 		{
+			using SqlConnection connection = GetSqlConnection();
+			var command = new SqlCommand(
+				"SELECT 1 FROM Product WHERE IdProduct = @idProduct",
+				connection
+			);
+
+			command.Parameters.AddWithValue("@idProduct", idProduct);
+
+			await connection.OpenAsync();
+
 			try
 			{
-				using SqlConnection connection = GetSqlConnection();
-				var command = new SqlCommand(
-					"SELECT 1 FROM Product WHERE IdProduct = @idProduct",
-					connection
-				);
-
-				command.Parameters.AddWithValue("@idProduct", idProduct);
-				await connection.OpenAsync();
-
 				var result = await command.ExecuteReaderAsync();
 
 				return result.HasRows;
@@ -41,22 +42,23 @@ namespace warehouses.Services
 
 		public async Task<Order> GetOrderAsync(int idProduct, int amount, DateTime createdAt)
 		{
+			using SqlConnection connection = GetSqlConnection();
+			var command = new SqlCommand(
+				@"SELECT TOP 1 * FROM ""Order"" " +
+				"WHERE IdProduct = @idProduct " +
+				"AND Amount = @amount " +
+				"AND CreatedAt < @createdAt",
+				connection
+			);
+
+			command.Parameters.AddWithValue("@idProduct", idProduct);
+			command.Parameters.AddWithValue("@amount", amount);
+			command.Parameters.AddWithValue("@createdAt", createdAt);
+
+			await connection.OpenAsync();
+
 			try
 			{
-				using SqlConnection connection = GetSqlConnection();
-				var command = new SqlCommand(
-					@"SELECT TOP 1 * FROM ""Order"" " +
-					"WHERE IdProduct = @idProduct " +
-					"AND Amount = @amount " +
-					"AND CreatedAt < @createdAt",
-					connection
-				);
-
-				command.Parameters.AddWithValue("@idProduct", idProduct);
-				command.Parameters.AddWithValue("@amount", amount);
-				command.Parameters.AddWithValue("@createdAt", createdAt);
-				await connection.OpenAsync();
-
 				var reader = await command.ExecuteReaderAsync();
 
 				await reader.ReadAsync();
@@ -78,47 +80,49 @@ namespace warehouses.Services
 
 		public async Task<bool> IsOrderCompletedAsync(Order order)
 		{
+			if (order == null || order.FulfilledAt != null)
+				return true;
+
+			using SqlConnection connection = GetSqlConnection();
+			var command = new SqlCommand(
+				"SELECT 1 FROM Product_Warehouse WHERE IdOrder = @idOrder",
+				connection
+			);
+
+			command.Parameters.AddWithValue("@idOrder", order.IdOrder);
+
+			await connection.OpenAsync();
+
 			try
 			{
-				if (order.FulfilledAt != null)
-					return true;
-
-				using SqlConnection connection = GetSqlConnection();
-				var command = new SqlCommand(
-					"SELECT 1 FROM Product_Warehouse WHERE IdOrder = @idOrder",
-					connection
-				);
-
-				command.Parameters.AddWithValue("@idOrder", order.IdOrder);
-				await connection.OpenAsync();
-
 				var result = await command.ExecuteReaderAsync();
 
 				return result.HasRows;
 			}
 			catch (Exception)
 			{
-				return false;
+				return true;
 			}
 		}
 
 		public async Task<Order> CompleteOrderAsync(int idOrder)
 		{
+			using SqlConnection connection = GetSqlConnection();
+			var command = new SqlCommand(
+				@"UPDATE ""Order"" " +
+				"SET FulfilledAt = @fulfilledAt " +
+				"OUTPUT INSERTED.*" +
+				"WHERE IdOrder = @idOrder",
+				connection
+			);
+
+			command.Parameters.AddWithValue("@fulfilledAt", DateTime.Now);
+			command.Parameters.AddWithValue("@idOrder", idOrder);
+
+			await connection.OpenAsync();
+
 			try
 			{
-				using SqlConnection connection = GetSqlConnection();
-				var command = new SqlCommand(
-					@"UPDATE ""Order"" " +
-					"SET FulfilledAt = @fulfilledAt " +
-					"OUTPUT INSERTED.*" +
-					"WHERE IdOrder = @idOrder",
-					connection
-				);
-
-				command.Parameters.AddWithValue("@fulfilledAt", DateTime.Now);
-				command.Parameters.AddWithValue("@idOrder", idOrder);
-				await connection.OpenAsync();
-
 				var reader = await command.ExecuteReaderAsync();
 
 				await reader.ReadAsync();
