@@ -9,7 +9,7 @@ namespace warehouses.Models
 		public int IdProduct { get; set; }
 		public int IdOrder { get; set; }
 		public int Amount { get; set; }
-		public int Price { get; set; }
+		public double Price { get; set; }
 		public DateTime CreatedAt { get; set; }
 	}
 }

@@ -19,7 +19,7 @@ namespace warehouses.Services
 		public async Task<bool> ProductExistsAsync(int idProduct)
 		{
 			using SqlConnection connection = GetSqlConnection();
-			var command = new SqlCommand(
+			using SqlCommand command = new(
 				"SELECT 1 FROM Product WHERE IdProduct = @idProduct",
 				connection
 			);
@@ -30,9 +30,9 @@ namespace warehouses.Services
 
 			try
 			{
-				var result = await command.ExecuteReaderAsync();
+				using SqlDataReader reader = await command.ExecuteReaderAsync();
 
-				return result.HasRows;
+				return reader.HasRows;
 			}
 			catch (Exception)
 			{
@@ -43,7 +43,7 @@ namespace warehouses.Services
 		public async Task<Order> GetOrderAsync(int idProduct, int amount, DateTime createdAt)
 		{
 			using SqlConnection connection = GetSqlConnection();
-			var command = new SqlCommand(
+			using SqlCommand command = new(
 				@"SELECT TOP 1 * FROM ""Order"" " +
 				"WHERE IdProduct = @idProduct " +
 				"AND Amount = @amount " +
@@ -59,7 +59,7 @@ namespace warehouses.Services
 
 			try
 			{
-				var reader = await command.ExecuteReaderAsync();
+				using SqlDataReader reader = await command.ExecuteReaderAsync();
 
 				await reader.ReadAsync();
 
@@ -80,11 +80,8 @@ namespace warehouses.Services
 
 		public async Task<bool> IsOrderCompletedAsync(Order order)
 		{
-			if (order == null || order.FulfilledAt != null)
-				return true;
-
 			using SqlConnection connection = GetSqlConnection();
-			var command = new SqlCommand(
+			using SqlCommand command = new(
 				"SELECT 1 FROM Product_Warehouse WHERE IdOrder = @idOrder",
 				connection
 			);
@@ -95,50 +92,13 @@ namespace warehouses.Services
 
 			try
 			{
-				var result = await command.ExecuteReaderAsync();
+				using SqlDataReader reader = await command.ExecuteReaderAsync();
 
-				return result.HasRows;
+				return reader.HasRows;
 			}
 			catch (Exception)
 			{
 				return true;
-			}
-		}
-
-		public async Task<Order> CompleteOrderAsync(int idOrder)
-		{
-			using SqlConnection connection = GetSqlConnection();
-			var command = new SqlCommand(
-				@"UPDATE ""Order"" " +
-				"SET FulfilledAt = @fulfilledAt " +
-				"OUTPUT INSERTED.*" +
-				"WHERE IdOrder = @idOrder",
-				connection
-			);
-
-			command.Parameters.AddWithValue("@fulfilledAt", DateTime.Now);
-			command.Parameters.AddWithValue("@idOrder", idOrder);
-
-			await connection.OpenAsync();
-
-			try
-			{
-				var reader = await command.ExecuteReaderAsync();
-
-				await reader.ReadAsync();
-
-				return new()
-				{
-					IdOrder = Convert.ToInt32(reader["IdOrder"]),
-					IdProduct = Convert.ToInt32(reader["IdProduct"]),
-					Amount = Convert.ToInt32(reader["Amount"]),
-					CreatedAt = Convert.ToDateTime(reader["CreatedAt"]),
-					FulfilledAt = Convert.ToDateTime(reader["FulfilledAt"])
-				};
-			}
-			catch (Exception)
-			{
-				return null;
 			}
 		}
 
@@ -155,31 +115,43 @@ namespace warehouses.Services
 
 			try
 			{
-				command.CommandText = "SELECT Price FROM Product WHERE IdProduct = @idProduct";
-				command.Parameters.AddWithValue("@idProduct", productDto.IdProduct);
+				var now = DateTime.Now;
 
-				var reader = await command.ExecuteReaderAsync();
+				command.CommandText = @"UPDATE ""Order"" SET FulfilledAt = @fulfilledAt WHERE IdOrder = @idOrder";
+				command.Parameters.AddWithValue("@fulfilledAt", now);
+				command.Parameters.AddWithValue("@idOrder", idOrder);
 
-				await reader.ReadAsync();
-
-				int price = Convert.ToInt32(reader["Price"]);
+				await command.ExecuteNonQueryAsync();
 
 				command.Parameters.Clear();
 
-				command.CommandText = "INSERT INTO Product_Warehouse(IdWarehouse, IdProduct, IdOrder, Amount, Price, CreatedAt) " +
-					"VALUES (@idWarehouse, @idProduct, @idOrder, @amount, @price, @createdAt)";
-				command.Parameters.AddWithValue("@idWarehouse", productDto.IdWarehouse);
+				command.CommandText = "SELECT Price FROM Product WHERE IdProduct = @idProduct";
 				command.Parameters.AddWithValue("@idProduct", productDto.IdProduct);
-				command.Parameters.AddWithValue("@idOrder", idOrder);
-				command.Parameters.AddWithValue("@amount", productDto.Amount);
-				command.Parameters.AddWithValue("@price", productDto.Amount * price);
-				command.Parameters.AddWithValue("@createdAt", DateTime.Now);
 
-				int id = Convert.ToInt32(await command.ExecuteScalarAsync());
+				using (SqlDataReader reader = await command.ExecuteReaderAsync())
+				{
+					await reader.ReadAsync();
+
+					double price = Convert.ToDouble(reader["Price"]);
+
+					command.Parameters.Clear();
+
+					command.CommandText = "INSERT INTO Product_Warehouse(IdWarehouse, IdProduct, IdOrder, Amount, Price, CreatedAt) " +
+						"OUTPUT INSERTED.IdProductWarehouse " +
+						"VALUES (@idWarehouse, @idProduct, @idOrder, @amount, @price, @createdAt)";
+					command.Parameters.AddWithValue("@idWarehouse", productDto.IdWarehouse);
+					command.Parameters.AddWithValue("@idProduct", productDto.IdProduct);
+					command.Parameters.AddWithValue("@idOrder", idOrder);
+					command.Parameters.AddWithValue("@amount", productDto.Amount);
+					command.Parameters.AddWithValue("@price", productDto.Amount * price);
+					command.Parameters.AddWithValue("@createdAt", now);
+				}
+
+				var id = await command.ExecuteScalarAsync();
 
 				await transaction.CommitAsync();
 
-				return id;
+				return Convert.ToInt32(id);
 			}
 			catch (Exception)
 			{
