@@ -142,9 +142,51 @@ namespace warehouses.Services
 			}
 		}
 
-		public async Task<int> RegisterWarehouseProductAsync(ProductDto productDto)
+		public async Task<int> RegisterWarehouseProductAsync(int idOrder, ProductDto productDto)
 		{
-			throw new NotImplementedException();
+			using SqlConnection connection = GetSqlConnection();
+			using SqlCommand command = connection.CreateCommand();
+
+			await connection.OpenAsync();
+
+			var transaction = await connection.BeginTransactionAsync();
+
+			command.Transaction = (SqlTransaction)transaction;
+
+			try
+			{
+				command.CommandText = "SELECT Price FROM Product WHERE IdProduct = @idProduct";
+				command.Parameters.AddWithValue("@idProduct", productDto.IdProduct);
+
+				var reader = await command.ExecuteReaderAsync();
+
+				await reader.ReadAsync();
+
+				int price = Convert.ToInt32(reader["Price"]);
+
+				command.Parameters.Clear();
+
+				command.CommandText = "INSERT INTO Product_Warehouse(IdWarehouse, IdProduct, IdOrder, Amount, Price, CreatedAt) " +
+					"VALUES (@idWarehouse, @idProduct, @idOrder, @amount, @price, @createdAt)";
+				command.Parameters.AddWithValue("@idWarehouse", productDto.IdWarehouse);
+				command.Parameters.AddWithValue("@idProduct", productDto.IdProduct);
+				command.Parameters.AddWithValue("@idOrder", idOrder);
+				command.Parameters.AddWithValue("@amount", productDto.Amount);
+				command.Parameters.AddWithValue("@price", productDto.Amount * price);
+				command.Parameters.AddWithValue("@createdAt", DateTime.Now);
+
+				int id = Convert.ToInt32(await command.ExecuteScalarAsync());
+
+				await transaction.CommitAsync();
+
+				return id;
+			}
+			catch (Exception)
+			{
+				await transaction.RollbackAsync();
+
+				return -1;
+			}
 		}
 
 		private SqlConnection GetSqlConnection()
