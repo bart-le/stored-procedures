@@ -102,9 +102,40 @@ namespace warehouses.Services
 			}
 		}
 
-		public async Task CompleteOrderAsync(int idOrder)
+		public async Task<Order> CompleteOrderAsync(int idOrder)
 		{
-			throw new NotImplementedException();
+			try
+			{
+				using SqlConnection connection = GetSqlConnection();
+				var command = new SqlCommand(
+					@"UPDATE ""Order"" " +
+					"SET FulfilledAt = @fulfilledAt " +
+					"OUTPUT INSERTED.*" +
+					"WHERE IdOrder = @idOrder",
+					connection
+				);
+
+				command.Parameters.AddWithValue("@fulfilledAt", DateTime.Now);
+				command.Parameters.AddWithValue("@idOrder", idOrder);
+				await connection.OpenAsync();
+
+				var reader = await command.ExecuteReaderAsync();
+
+				await reader.ReadAsync();
+
+				return new()
+				{
+					IdOrder = Convert.ToInt32(reader["IdOrder"]),
+					IdProduct = Convert.ToInt32(reader["IdProduct"]),
+					Amount = Convert.ToInt32(reader["Amount"]),
+					CreatedAt = Convert.ToDateTime(reader["CreatedAt"]),
+					FulfilledAt = Convert.ToDateTime(reader["FulfilledAt"])
+				};
+			}
+			catch (Exception)
+			{
+				return null;
+			}
 		}
 
 		public async Task<int> RegisterWarehouseProductAsync(ProductDto productDto)
